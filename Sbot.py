@@ -32,6 +32,8 @@ def get_adjusted_multiplier(rank, current_level):
     base = RANK_MULTIPLIERS[rank]
     if current_level <= 3:
         return base + 0.05
+    elif current_level <= 5:
+        return base  # +4〜+5は補正なし
     elif current_level <= 8:
         return base - 0.05
     else:  # +9以上
