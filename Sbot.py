@@ -27,16 +27,19 @@ RANK_MULTIPLIERS = {
 # 祝福の宝石価格（初期値。メッセージで誰でも変更可能）
 BLESSING_GEM_PRICE = 1070
 
-# 係数補正関数（+3以下 +0.05、+6〜+8 -0.05、+9以上 -0.10）
-def get_adjusted_multiplier(rank, current_level):
+# 係数補正関数（+3以下 +0.05、+4〜+5 補正なし、+6〜+8 -0.05、+9以上 -0.10）
+def get_adjusted_multiplier(rank, current_level, is_special=False):
     base = RANK_MULTIPLIERS[rank]
+    if is_special:  # 「お得」指定時は一律 -0.1
+        return base - 0.10
+    
     if current_level <= 3:
         return base + 0.05
     elif current_level <= 5:
-        return base  # +4〜+5は補正なし
+        return base          # +4〜+5は補正なし
     elif current_level <= 8:
         return base - 0.05
-    else:  # +9以上
+    else:
         return base - 0.10
 
 @client.event
@@ -71,8 +74,7 @@ async def on_message(message):
             try:
                 new_price = int(match.group(1))
                 if new_price < 0:
-                    await message.channel.send("価格は0以上でお願い！")
-                    return
+                    return  # 無視
                 global BLESSING_GEM_PRICE
                 old = BLESSING_GEM_PRICE
                 BLESSING_GEM_PRICE = new_price
@@ -80,29 +82,34 @@ async def on_message(message):
                     f"祝福の宝石価格を **{old:,} → {new_price:,} マー** に更新しました！"
                 )
             except:
-                await message.channel.send("「祝福」+数字でお願い（例: 祝福1090）")
+                pass  # 無視
         return
 
-    # 相場計算
-    if len(content) < 3 or '+' not in content or content[0] not in RANK_MULTIPLIERS:
-        return
+    # 相場計算（入力形式チェックを緩く、全角＋対応）
+    # スペース削除＆全角＋を半角に変換して判定
+    clean_content = content.replace(" ", "").replace("＋", "+")
+    
+    if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
+        return  # 無視（エラーメッセージなし）
+
+    # 「お得」フラグ（最後に「お得」が付いてるか）
+    is_special = clean_content.endswith("オトク") or clean_content.endswith("お得")
 
     try:
-        rank = content[0]
-        rest = content[1:]
+        rank = clean_content[0]
+        rest = clean_content[1:]
         price_str, plus_str = rest.split('+', 1)
         base_price = int(price_str)
         target_plus = int(plus_str)
 
         if target_plus < 0:
-            await message.channel.send("強化値は0以上で！")
-            return
+            return  # 無視
 
         # 通常相場
         normal = float(base_price)
         normal_steps = [f"+0: {base_price}"]
         for lv in range(1, target_plus + 1):
-            coeff = get_adjusted_multiplier(rank, lv)
+            coeff = get_adjusted_multiplier(rank, lv, is_special)
             normal *= coeff
             normal_steps.append(f"+{lv}: {normal:.0f} × {coeff:.2f} = {normal:.0f}")
 
@@ -114,7 +121,7 @@ async def on_message(message):
         gem_count = 0
 
         for lv in range(1, target_plus + 1):
-            coeff = get_adjusted_multiplier(rank, lv)
+            coeff = get_adjusted_multiplier(rank, lv, is_special)
             mul = gem * coeff
 
             if lv <= 3:
@@ -157,12 +164,10 @@ async def on_message(message):
 
         await message.channel.send(res)
 
-    except ValueError:
-        await message.channel.send("入力形式が変かも…例: S500+4 や 祝福1090")
-    except Exception as e:
-        await message.channel.send(f"エラー: {str(e)}")
+    except:
+        return  # エラー時は無視（メッセージなし）
 
-# FlaskでKoyebの健康チェック対応
+# FlaskでKoyeb健康チェック対応
 app = Flask(__name__)
 
 @app.route('/')
@@ -178,7 +183,7 @@ def run_flask():
 
 Thread(target=run_flask).start()
 
-# トークンは環境変数から取得（KoyebのEnvironment variablesで設定）
+# トークンは環境変数から取得
 TOKEN = os.getenv("TOKEN")
 
 if TOKEN is None:
