@@ -76,15 +76,15 @@ async def on_message(message):
         return
 
     # 相場計算（入力チェックを緩く）
+       # 相場計算（入力チェックを緩く、全角＋対応）
     clean_content = re.sub(r'\s+', '', content.upper())  # スペース全削除
     clean_content = clean_content.replace('＋', '+')     # 全角＋を半角に
 
     if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
         return  # 無視
 
-    # 「お得」検知（末尾10文字以内に含まれてればOK）
-    tail = clean_content[-10:]
-    is_special = "お得" in tail or "オトク" in tail
+    # 「お得」検知（メッセージ全体に含まれてればOK + 末尾優先）
+    is_special = "お得" in content or "オトク" in content or "おとく" in content.lower()
 
     # デバッグログ（Koyeb Logsで確認用）
     print(f"受信: {content} | clean: {clean_content} | お得検知: {is_special}")
