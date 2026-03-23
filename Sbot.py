@@ -78,15 +78,30 @@ async def on_message(message):
 
     print(f"受信: {content} | お得検知: {is_special}")  # デバッグ用
 
-    try:
+        try:
         rank = clean_content[0]
         rest = clean_content[1:]
-        price_str, plus_str = rest.split('+', 1)
+
+        # + で分割前に「お得」部分を切り落とす（数字だけ残す）
+        # 数字の後ろに文字が入ってたら切り落とし
+        plus_index = rest.find('+')
+        if plus_index == -1:
+            return
+
+        price_str = rest[:plus_index]
+        after_plus = rest[plus_index+1:]
+
+        # after_plus から数字だけ抜き出す（お得などが付いててもOK）
+        plus_str = ''.join(c for c in after_plus if c.isdigit())
+
         base_price = int(price_str)
-        target_plus = int(plus_str)
+        target_plus = int(plus_str) if plus_str else 0
 
         if target_plus < 0:
             return
+
+        # 以降の計算は同じ
+        # ...（normal = float(base_price) から最後までそのまま）
 
         # 通常相場
         normal = float(base_price)
