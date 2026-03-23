@@ -36,6 +36,7 @@ async def on_ready():
     print(f"ログイン成功！ あるけみすと装備相場Bot")
     print(f"名前: {client.user}")
     await tree.sync()
+    print("スラッシュコマンド同期完了")
 
 @tree.command(name="hello", description="挨拶＋宝石価格確認")
 async def hello(interaction: discord.Interaction):
@@ -67,23 +68,23 @@ async def on_message(message):
                 pass
         return
 
-    # 相場計算（全角＋・スペース対応）
+    # 相場計算（入力チェックを緩く）
     clean_content = re.sub(r'\s+', '', content.upper()).replace('＋', '+')
 
     if len(clean_content) < 3 or '+' not in clean_content or clean_content[0] not in RANK_MULTIPLIERS:
         return
 
-    # 「お得」検知（大幅強化）
-    is_special = any(x in content for x in ["お得", "オトク", "おとく"])
+    # 「お得」検知（全体検索で確実）
+    is_special = any(word in content for word in ["お得", "オトク", "おとく"])
 
-    print(f"受信: {content} | お得検知: {is_special}")  # デバッグ用
+    # デバッグログ
+    print(f"受信: {content} | お得検知: {is_special}")
 
-        try:
+    try:
         rank = clean_content[0]
         rest = clean_content[1:]
 
-        # + で分割前に「お得」部分を切り落とす（数字だけ残す）
-        # 数字の後ろに文字が入ってたら切り落とし
+        # + で分割
         plus_index = rest.find('+')
         if plus_index == -1:
             return
@@ -91,7 +92,7 @@ async def on_message(message):
         price_str = rest[:plus_index]
         after_plus = rest[plus_index+1:]
 
-        # after_plus から数字だけ抜き出す（お得などが付いててもOK）
+        # after_plus から数字だけ抽出（お得などが付いててもOK）
         plus_str = ''.join(c for c in after_plus if c.isdigit())
 
         base_price = int(price_str)
@@ -99,9 +100,6 @@ async def on_message(message):
 
         if target_plus < 0:
             return
-
-        # 以降の計算は同じ
-        # ...（normal = float(base_price) から最後までそのまま）
 
         # 通常相場
         normal = float(base_price)
@@ -113,7 +111,7 @@ async def on_message(message):
 
         normal_price = round(normal)
 
-        # 宝石使用相場（is_special適用）
+        # 宝石使用相場
         gem = float(base_price)
         gem_steps = [f"+0: {base_price}"]
         gem_count = 0
@@ -123,8 +121,9 @@ async def on_message(message):
             mul = gem * coeff
 
             if lv <= 3:
-                chosen = min(mul, gem + BLESSING_GEM_PRICE)
-                if chosen == gem + BLESSING_GEM_PRICE:
+                gem_val = gem + BLESSING_GEM_PRICE
+                chosen = min(mul, gem_val)
+                if chosen == gem_val:
                     gem_count += 1
                     gem_steps.append(f"+{lv}: {gem:.0f} + {BLESSING_GEM_PRICE} = {chosen:.0f} (宝石)")
                 else:
@@ -136,28 +135,35 @@ async def on_message(message):
 
         gem_price = round(gem)
 
-        # 安い方を返す
+        # 安い方をメイン表示
         if gem_price < normal_price:
             main_p = gem_price
             main_t = f"宝石{gem_count}個使用"
+            sub_p = normal_price
+            sub_t = "通常"
             steps = gem_steps
         else:
             main_p = normal_price
             main_t = "通常"
+            sub_p = gem_price
+            sub_t = f"宝石{gem_count}個使用"
             steps = normal_steps
 
         res = f"**{rank}{base_price}+{target_plus} の相場**\n"
         res += f"→ **{main_p:,} マー** （{main_t}）\n"
+        if sub_p != main_p:
+            res += f"　　（もう一方: {sub_p:,} マー）\n\n"
+
         res += "【詳細ステップ】\n" + "\n".join(steps) + "\n"
         res += f"最終: {main_p:,} マー"
 
         await message.channel.send(res)
 
     except Exception as e:
-        print(f"エラー: {e}")  # ログに残すだけ
-        return
+        print(f"計算エラー: {e} | 入力: {content}")
+        return  # 無視（エラー通知なし）
 
-# Flask（健康チェック）
+# Flask健康チェック
 app = Flask(__name__)
 
 @app.route('/health')
