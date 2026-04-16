@@ -162,7 +162,18 @@ async def on_message(message):
     except Exception as e:
         print(f"計算エラー: {e} | 入力: {content}")
         return  # 無視（エラー通知なし）
-
+    except discord.HTTPException as e:
+        if e.status == 429:
+            print(f"レート制限に引っかかりました: {e}")
+            # 少し待ってから再試行（簡易版）
+            await asyncio.sleep(2)
+            return
+        else:
+            print(f"HTTPエラー: {e}")
+            return
+    except Exception as e:
+        print(f"計算エラー: {e} | 入力: {content}")
+        return
 # Flask健康チェック
 app = Flask(__name__)
 
